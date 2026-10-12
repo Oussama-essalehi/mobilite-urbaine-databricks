@@ -27,6 +27,7 @@ for volume, comment in [
     ("landing", "Zone d'atterrissage des réponses API brutes (JSON)"),
     ("checkpoints", "Checkpoints Auto Loader"),
 ]:
-    spark.sql(f"CREATE VOLUME IF NOT EXISTS {catalog}.{schema}.{volume} COMMENT '{comment}'")
+    safe_comment = comment.replace("'", "''")   # échappe les apostrophes pour SQL
+    spark.sql(f"CREATE VOLUME IF NOT EXISTS {catalog}.{schema}.{volume} COMMENT '{safe_comment}'")
 
 display(spark.sql(f"SHOW VOLUMES IN {catalog}.{schema}"))
