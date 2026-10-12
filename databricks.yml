@@ -1,0 +1,91 @@
+# Databricks Asset Bundle — notebooks + 3 jobs planifiés
+# Déploiement :  databricks bundle validate  &&  databricks bundle deploy -t dev
+bundle:
+  name: mobilite-urbaine
+
+variables:
+  catalog:
+    default: workspace
+  schema:
+    default: mobility
+  alert_email:
+    description: Adresse qui reçoit les alertes d'échec des jobs
+    default: oussama.essalehi@gmail.com
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://<votre-workspace>.cloud.databricks.com   # à remplacer
+
+# Aucun cluster déclaré : toutes les tâches tournent en serverless (seul compute de la Free Edition).
+resources:
+  jobs:
+
+    # 1) Collecte : API → landing → bronze → silver, toutes les 15 min
+    mobilite_ingestion:
+      name: "[mobilite] 1 - ingestion (15 min)"
+      schedule:
+        # passer à "0 0/30 * * * ?" si le quota d'usage Free Edition est atteint
+        quartz_cron_expression: "0 0/15 * * * ?"
+        timezone_id: Europe/Paris
+        pause_status: UNPAUSED
+      max_concurrent_runs: 1
+      email_notifications:
+        on_failure: [ "${var.alert_email}" ]
+      parameters:
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: schema,  default: "${var.schema}" }
+      tasks:
+        - task_key: ingest_api
+          max_retries: 2
+          min_retry_interval_millis: 60000
+          notebook_task: { notebook_path: ./src/01_ingest_api.py }
+        - task_key: bronze
+          depends_on: [ { task_key: ingest_api } ]
+          notebook_task: { notebook_path: ./src/02_bronze.py }
+        - task_key: silver
+          depends_on: [ { task_key: bronze } ]
+          notebook_task: { notebook_path: ./src/03_silver.py }
+
+    # 2) Analytique : gold + recommandations, toutes les heures
+    mobilite_analytique:
+      name: "[mobilite] 2 - gold & recommandations (horaire)"
+      schedule:
+        quartz_cron_expression: "0 7 * * * ?"
+        timezone_id: Europe/Paris
+        pause_status: UNPAUSED
+      max_concurrent_runs: 1
+      email_notifications:
+        on_failure: [ "${var.alert_email}" ]
+      parameters:
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: schema,  default: "${var.schema}" }
+      tasks:
+        - task_key: gold
+          notebook_task: { notebook_path: ./src/04_gold.py }
+        - task_key: recommandations
+          depends_on: [ { task_key: gold } ]
+          notebook_task: { notebook_path: ./src/07_recommendations.py }
+
+    # 3) Machine learning : clustering + prévision, chaque nuit
+    mobilite_ml:
+      name: "[mobilite] 3 - clustering & prévision (quotidien)"
+      schedule:
+        quartz_cron_expression: "0 30 4 * * ?"
+        timezone_id: Europe/Paris
+        pause_status: UNPAUSED
+      max_concurrent_runs: 1
+      email_notifications:
+        on_failure: [ "${var.alert_email}" ]
+      parameters:
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: schema,  default: "${var.schema}" }
+        - { name: register_models, default: "false" }
+      tasks:
+        - task_key: clustering
+          notebook_task: { notebook_path: ./src/05_ml_clustering.py }
+        - task_key: prevision
+          depends_on: [ { task_key: clustering } ]
+          notebook_task: { notebook_path: ./src/06_ml_forecast.py }

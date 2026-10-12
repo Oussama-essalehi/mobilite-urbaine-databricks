@@ -1,0 +1,102 @@
+// =====================================================================
+//  Table calendrier (Modélisation → Nouvelle table)
+// =====================================================================
+//  Bornes fixes : une table calculée ne peut pas lire une table en DirectQuery.
+//  Remplacer la date de début par celle du lancement de l'ingestion.
+Date =
+    ADDCOLUMNS (
+        CALENDAR ( DATE ( 2026, 10, 1 ), TODAY () + 1 ),
+        "Année", YEAR ( [Date] ),
+        "Mois", FORMAT ( [Date], "mmm yyyy" ),
+        "MoisNum", YEAR ( [Date] ) * 100 + MONTH ( [Date] ),
+        "Jour", FORMAT ( [Date], "dddd" ),
+        "JourNum", WEEKDAY ( [Date], 2 ),
+        "Type de jour", IF ( WEEKDAY ( [Date], 2 ) >= 6, "Week-end", "Semaine" )
+    )
+
+// =====================================================================
+//  Fréquentation
+// =====================================================================
+Départs = SUM ( gold_station_hourly[departures] )
+
+Arrivées = SUM ( gold_station_hourly[arrivals] )
+
+Flux net = [Arrivées] - [Départs]
+
+Départs par jour =
+DIVIDE ( [Départs], DISTINCTCOUNT ( gold_station_hourly[date_local] ) )
+
+Départs S-1 =
+CALCULATE ( [Départs], DATEADD ( 'Date'[Date], -7, DAY ) )
+
+Évolution vs S-1 =
+DIVIDE ( [Départs] - [Départs S-1], [Départs S-1] )
+
+// =====================================================================
+//  Disponibilité & saturation
+// =====================================================================
+Taux de remplissage = AVERAGE ( gold_station_hourly[avg_fill_rate] )
+
+% temps vide = AVERAGE ( gold_station_hourly[pct_time_empty] )
+
+% temps pleine = AVERAGE ( gold_station_hourly[pct_time_full] )
+
+% temps saturée = [% temps vide] + [% temps pleine]
+
+Vélos disponibles (actuel) = SUM ( gold_station_current[available_bikes] )
+
+Bornes libres (actuel) = SUM ( gold_station_current[available_stands] )
+
+Stations vides (actuel) =
+CALCULATE ( COUNTROWS ( gold_station_current ), gold_station_current[availability_status] = "Vide" )
+
+Stations pleines (actuel) =
+CALCULATE ( COUNTROWS ( gold_station_current ), gold_station_current[availability_status] = "Pleine" )
+
+Dernière collecte = MAX ( gold_station_current[snapshot_local] )
+
+// =====================================================================
+//  Météo
+// =====================================================================
+Effet pluie =
+CALCULATE (
+    AVERAGE ( gold_weather_effect[relative_to_reference] ),
+    gold_weather_effect[dimension] = "Météo",
+    gold_weather_effect[category] IN { "Pluie", "Forte pluie" }
+) - 1
+
+// =====================================================================
+//  Prévision & rééquilibrage
+// =====================================================================
+Départs prévus = SUM ( gold_forecast_station_hourly[pred_departures] )
+
+Arrivées prévues = SUM ( gold_forecast_station_hourly[pred_arrivals] )
+
+Stations à réapprovisionner =
+CALCULATE ( COUNTROWS ( gold_rebalancing_latest ), gold_rebalancing_latest[action] = "REAPPROVISIONNER" )
+
+Stations à délester =
+CALCULATE ( COUNTROWS ( gold_rebalancing_latest ), gold_rebalancing_latest[action] = "DELESTER" )
+
+Vélos à déplacer =
+CALCULATE ( SUM ( gold_rebalancing_latest[bikes_to_move] ), gold_rebalancing_latest[action] = "REAPPROVISIONNER" )
+
+Taux de couverture par appariement =
+DIVIDE (
+    SUM ( gold_rebalancing_latest[bikes_covered_by_pairing] ),
+    [Vélos à déplacer]
+)
+
+// =====================================================================
+//  Qualité & modèles
+// =====================================================================
+Taux d'échec qualité =
+DIVIDE ( SUM ( dq_log[failed_rows] ), SUM ( dq_log[total_rows] ) )
+
+MAE dernière version =
+VAR _last = MAX ( gold_model_metrics[trained_at] )
+RETURN CALCULATE ( AVERAGE ( gold_model_metrics[mae] ), gold_model_metrics[trained_at] = _last )
+
+Gain vs baseline =
+VAR _last = MAX ( gold_model_metrics[trained_at] )
+RETURN CALCULATE ( AVERAGE ( gold_model_metrics[skill_vs_baseline] ), gold_model_metrics[trained_at] = _last )
