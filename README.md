@@ -14,8 +14,8 @@ MLflow · scikit-learn · Power BI (DirectQuery, DAX) · Databricks Asset Bundle
 
 ```
                          Job 1 — toutes les 15 min                      Job 2 — toutes les heures
-API VélôToulouse ──┐   ┌──────────────────────────────────────┐   ┌────────────────────────────────────┐
-(open data)        ├──►│ 01 ingestion → landing (JSON brut)    │   │ 04 gold : faits horaires, profils,  │
+GBFS VélôToulouse ─┐   ┌──────────────────────────────────────┐   ┌────────────────────────────────────┐
+(temps réel)       ├──►│ 01 ingestion → landing (JSON brut)    │   │ 04 gold : faits horaires, profils,  │
 API Open-Meteo ────┘   │ 02 Auto Loader → bronze (Delta)       │──►│    saturation, effet météo          │──► Power BI
                        │ 03 silver : parsing, typage, MERGE,   │   │ 07 recommandations de rééquilibrage │   (DirectQuery
                        │    expectations, quarantaine, fraîcheur│   └────────────────────────────────────┘    SQL warehouse)
@@ -105,8 +105,7 @@ en reprenant `databricks.yml` (tâches, dépendances, planification).
 ### 3. Initialiser et vérifier
 1. Exécuter `src/00_setup.py` (schéma + volumes).
 2. Exécuter à la main `01_ingest_api` → `02_bronze` → `03_silver` → `04_gold`.
-3. **Vérifier les champs de l'API vélo** : le parsing gère les noms de champs du jeu Toulouse Métropole et leurs
-   variantes. Si `silver_velo_quarantine` se remplit, regarder `_failed_rules` et un `raw_json` de
+3. **Vérifier le parsing vélo** : le parsing gère les flux GBFS v3 et v2. Si `silver_velo_quarantine` se remplit, regarder `_failed_rules` et un `raw_json` de
    `bronze_velo_raw`, puis ajuster `parse_velo` dans `03_silver.py`.
 4. Activer les jobs (ils le sont par défaut avec le bundle).
 
@@ -168,5 +167,5 @@ captures du rapport Power BI.
 
 | Source | Licence |
 |---|---|
-| [VélôToulouse temps réel — Toulouse Métropole](https://data.toulouse-metropole.fr/explore/dataset/api-velo-toulouse-temps-reel/) | Licence Ouverte 2.0 |
+| [VélôToulouse — flux GBFS (JCDecaux / Cyclocity)](https://mobilitydatabase.org/feeds/gbfs/gbfs-toulouse), découverte : `https://api.cyclocity.fr/contracts/toulouse/gbfs/v3/gbfs.json` | flux public, sans clé d'API |
 | [Open-Meteo](https://open-meteo.com/) | CC BY 4.0 |

@@ -98,49 +98,64 @@ CREATE TABLE IF NOT EXISTS {T}.silver_meteo_hourly (
 
 # MAGIC %md
 # MAGIC ## Vélos — parsing & qualité
-# MAGIC Les enregistrements sont lus comme `map<string,string>` puis typés avec `try_cast` : un champ manquant ou mal
-# MAGIC formé devient NULL (et part en quarantaine) au lieu de faire planter le pipeline. Les noms de champs
-# MAGIC alternatifs (`number` / `station_number`, `position` / `geo_point_2d`…) sont gérés par `coalesce`.
+# MAGIC Chaque fichier contient les deux flux GBFS d'une même collecte : `station_status` (état) et
+# MAGIC `station_information` (référentiel). Ils sont éclatés puis joints sur `station_id`.
+# MAGIC Les champs sont lus comme `map<string,string>` puis typés avec `try_cast` : un champ manquant ou mal
+# MAGIC formé devient NULL (et part en quarantaine) au lieu de faire planter le pipeline. Les noms GBFS v3 et v2
+# MAGIC sont gérés (`num_vehicles_available` / `num_bikes_available`, nom localisé ou texte simple, date ISO ou epoch).
 
 # COMMAND ----------
 
 VELO_RULES = {
     "station_id_present":   "station_id IS NOT NULL",
     "snapshot_ts_present":  "snapshot_ts IS NOT NULL",
+    "station_info_found":   "station_name IS NOT NULL",
     "bikes_non_negative":   "available_bikes >= 0",
     "stands_non_negative":  "available_stands >= 0",
     "capacity_positive":    "capacity > 0",
     "occupancy_consistent": "available_bikes + available_stands <= capacity",
     "coords_in_toulouse":   "lat BETWEEN 43.45 AND 43.75 AND lon BETWEEN 1.25 AND 1.65",
-    "status_known":         "status IN ('OPEN', 'CLOSED')",
 }
 
 
-def parse_velo(bronze_df):
-    records = bronze_df.selectExpr(
+def _explode_feed(bronze_df, feed: str, alias: str):
+    return bronze_df.selectExpr(
         "fetched_at",
-        "explode(from_json(get_json_object(raw_json, '$.payload'), 'array<map<string,string>>')) AS m",
+        f"explode(from_json(get_json_object(raw_json, '$.payload.{feed}.data.stations'), "
+        f"'array<map<string,string>>')) AS {alias}",
     )
-    return records.selectExpr(
+
+
+def parse_velo(bronze_df):
+    status = _explode_feed(bronze_df, "station_status", "m").selectExpr(
+        "fetched_at", "m['station_id'] AS sid", "m")
+    info = _explode_feed(bronze_df, "station_information", "i").selectExpr(
+        "fetched_at", "i['station_id'] AS sid", "i")
+
+    return status.join(info, ["fetched_at", "sid"], "left").selectExpr(
         "fetched_at AS snapshot_ts",
         "from_utc_timestamp(fetched_at, 'Europe/Paris') AS snapshot_local",
-        "try_cast(coalesce(m['number'], m['station_number']) AS INT) AS station_id",
-        "initcap(trim(regexp_replace(m['name'], '^[0-9]+\\\\s*-\\\\s*', ''))) AS station_name",
-        "initcap(trim(m['address'])) AS address",
-        "try_cast(coalesce(m['bike_stands'], m['capacity']) AS INT) AS capacity",
-        "try_cast(coalesce(m['available_bikes'], m['bikes']) AS INT) AS available_bikes",
-        "try_cast(coalesce(m['available_bike_stands'], m['stands']) AS INT) AS available_stands",
-        "upper(m['status']) AS status",
-        "coalesce(m['position'], m['geo_point_2d']) AS pos",
-        "m['lat'] AS lat_raw", "coalesce(m['lon'], m['lng']) AS lon_raw",
-        "lower(m['banking']) IN ('true', '1', 'oui') AS banking",
-        "coalesce(try_to_timestamp(m['last_update']), "
-        "timestamp_millis(try_cast(m['last_update'] AS BIGINT))) AS last_update",
+        # identifiant numérique de la station (accepte « 123 » comme « toulouse:123 »)
+        "try_cast(nullif(regexp_extract(sid, '([0-9]+)$', 1), '') AS INT) AS station_id",
+        # GBFS v3 : nom localisé [{text, language}] ; v2 : texte simple
+        "initcap(trim(regexp_replace(coalesce(get_json_object(i['name'], '$[0].text'), i['name']), "
+        "'^[0-9]+\\\\s*-\\\\s*', ''))) AS station_name",
+        "initcap(trim(i['address'])) AS address",
+        "try_cast(i['lat'] AS DOUBLE) AS lat",
+        "try_cast(i['lon'] AS DOUBLE) AS lon",
+        "lower(coalesce(i['rental_methods'], '')) LIKE '%creditcard%' AS banking",
+        "try_cast(coalesce(m['num_vehicles_available'], m['num_bikes_available']) AS INT) AS available_bikes",
+        "try_cast(m['num_docks_available'] AS INT) AS available_stands",
+        "try_cast(i['capacity'] AS INT) AS capacity_declared",
+        """CASE WHEN lower(m['is_installed']) IN ('true', '1') AND lower(m['is_renting']) IN ('true', '1')
+                THEN 'OPEN' ELSE 'CLOSED' END AS status""",
+        "coalesce(try_to_timestamp(m['last_reported']), "
+        "timestamp_seconds(try_cast(m['last_reported'] AS BIGINT))) AS last_update",
     ).selectExpr(
         "*",
-        "try_cast(coalesce(get_json_object(pos, '$.lat'), lat_raw) AS DOUBLE) AS lat",
-        "try_cast(coalesce(get_json_object(pos, '$.lon'), get_json_object(pos, '$.lng'), lon_raw) AS DOUBLE) AS lon",
-    ).drop("pos", "lat_raw", "lon_raw")
+        # capacité déclarée, sinon vélos + bornes libres
+        "coalesce(capacity_declared, available_bikes + available_stands) AS capacity",
+    ).drop("capacity_declared")
 
 
 STATUS_COLS = ["station_id", "snapshot_ts", "snapshot_local", "available_bikes", "available_stands",
