@@ -171,7 +171,9 @@ def style(fig: go.Figure, height: int = 360, legend: bool = True, hover: str = "
 
 
 def plot(fig: go.Figure, key: str | None = None) -> None:
-    st.plotly_chart(fig, width="stretch", config=PLOTLY_CONFIG, key=key)
+    # zoom à la molette / au pincement réservé aux cartes, pour ne pas gêner le défilement sur les graphiques
+    is_map = any(t.type == "scattermap" for t in fig.data)
+    st.plotly_chart(fig, width="stretch", config={**PLOTLY_CONFIG, "scrollZoom": is_map}, key=key)
 
 
 TOULOUSE = {"lat": 43.6045, "lon": 1.4440}

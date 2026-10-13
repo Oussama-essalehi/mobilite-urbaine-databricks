@@ -1,4 +1,4 @@
-"""Tableau de bord Streamlit — Les vélos en libre-service de Toulouse (VélôToulouse × météo).
+"""VéloScope Toulouse — tableau de bord Streamlit des vélos en libre-service de Toulouse (VélôToulouse × météo).
 
 Lancement :  streamlit run dashboard/app.py
 """
@@ -10,7 +10,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 st.set_page_config(
-    page_title="Vélos en libre-service à Toulouse",
+    page_title="VéloScope Toulouse",
     page_icon=":material/pedal_bike:",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -40,7 +40,7 @@ def _mark_seen() -> None:
 def welcome() -> None:
     st.markdown(
         """
-### Les vélos en libre-service de Toulouse, analysés automatiquement
+### VéloScope Toulouse : les vélos en libre-service, analysés automatiquement
 
 **Le point de départ.** Toulouse compte plus de 460 stations VélôToulouse. Un problème revient tous les jours :
 certaines stations sont **vides** quand on veut prendre un vélo, d'autres sont **pleines** quand on veut le rendre.
@@ -95,7 +95,7 @@ nav = st.navigation({
 
 src = data.source()
 with st.sidebar:
-    st.markdown("### :material/pedal_bike: Vélos à Toulouse")
+    st.markdown("### :material/pedal_bike: VéloScope Toulouse")
     dot = "#0ca30c" if src.mode == "databricks" else "#c98500"
     st.markdown(f'<div class="src-badge"><b><span class="legend-dot" style="background:{dot}"></span>'
                 f'{src.label}</b>{src.detail}</div>', unsafe_allow_html=True)

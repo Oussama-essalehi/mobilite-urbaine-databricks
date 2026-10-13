@@ -25,7 +25,6 @@ import numpy as np
 import pandas as pd
 import requests
 from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import silhouette_score
@@ -368,10 +367,8 @@ def clustering(sh):
 
     selection = pd.DataFrame([{"k": k, "silhouette": r["silhouette"], "inertia": r["inertia"]}
                               for k, r in results.items()])
-    coords = PCA(n_components=2, random_state=42).fit_transform(best["pipe"]["scaler"].transform(X))
-    pca = pd.DataFrame({"station_id": X.index, "pc1": coords[:, 0], "pc2": coords[:, 1]})
     print(f"Clustering : k = {best_k}, silhouette {best['silhouette']:.3f}")
-    return clusters, summary.reset_index(), selection, pca
+    return clusters, selection
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -542,7 +539,7 @@ def main(offline: bool):
     print(f"Simulation : {len(stations)} stations × {len(hours)} heures")
     sh = simulate_station_hourly(stations, kinds, dist, hours, weather_hist)
 
-    clusters, cluster_summary, k_selection, pca = clustering(sh)
+    clusters, k_selection = clustering(sh)
 
     dim = stations.copy()
     dim["station_label"] = dim.station_id.astype(str).str.zfill(5) + " - " + dim.station_name
@@ -571,8 +568,8 @@ def main(offline: bool):
     tables = {
         "dim_station": dim, "station_current": current, "network_hourly": net, "station_daily": daily,
         "saturation_profile": profile, "saturation_ranking": ranking, "weather_effect": effect,
-        "station_clusters": clusters, "cluster_summary": cluster_summary, "cluster_profiles": cluster_profiles,
-        "cluster_k_selection": k_selection, "cluster_pca": pca, "model_metrics": metrics,
+        "station_clusters": clusters, "cluster_profiles": cluster_profiles,
+        "cluster_k_selection": k_selection, "model_metrics": metrics,
         "feature_importance": importance, "forecast_test_network": test_net,
         "forecast_station_hourly": forecast, "dq_log": dq,
         "weather_hourly": weather_all.assign(is_forecast=weather_all.hour_local >= now_hour),

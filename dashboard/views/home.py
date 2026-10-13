@@ -29,7 +29,7 @@ PAGES = [
 
 def render() -> None:
     st.markdown(
-        """<div class="hero"><div class="page-eyebrow">Projet de données · Toulouse</div>
+        """<div class="hero"><div class="page-eyebrow">VéloScope Toulouse · Projet de données</div>
         <h1>Les vélos en libre-service de Toulouse, analysés automatiquement</h1>
         <p>Ce projet observe en continu les stations VélôToulouse et la météo, puis transforme ces données en réponses
         simples : quand et où les Toulousains prennent le vélo, ce que change la pluie, quelles stations manquent de

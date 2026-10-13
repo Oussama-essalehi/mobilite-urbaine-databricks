@@ -7,7 +7,7 @@ Deux sources, même contrat de tables (noms et colonnes des tables gold) :
   d'environnement `DATABRICKS_SERVER_HOSTNAME`, `DATABRICKS_HTTP_PATH`, `DATABRICKS_TOKEN` ;
 - **demo** : instantané Parquet produit par `scripts/build_demo_data.py` (historique simulé).
 
-Les tables qui n'existent que dans MLflow (sélection de k, ACP, importance des variables, série de test) ne
+Les tables qui n'existent que dans MLflow (sélection de k, importance des variables, série de test) ne
 sont disponibles qu'en démo : les pages concernées affichent alors un message à la place du graphique.
 """
 from __future__ import annotations
