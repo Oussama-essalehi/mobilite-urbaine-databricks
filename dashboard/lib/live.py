@@ -28,7 +28,7 @@ def availability_status(df: pd.DataFrame) -> np.ndarray:
         ["Fermée", "Vide", "Pleine", "Presque vide", "Presque pleine"], "Disponible")
 
 
-@st.cache_data(ttl=60, show_spinner="Lecture du flux GBFS VélôToulouse…")
+@st.cache_data(ttl=60, show_spinner="Lecture de l'état des stations VélôToulouse…")
 def fetch_live_status() -> tuple[pd.DataFrame, str] | None:
     """État courant de toutes les stations, ou None si l'API ne répond pas."""
     try:
@@ -54,7 +54,7 @@ def fetch_live_status() -> tuple[pd.DataFrame, str] | None:
     df["snapshot_local"] = stamp
     cols = ["station_id", "lat", "lon", "snapshot_local", "status", "available_bikes", "available_stands",
             "usable_capacity", "fill_rate", "availability_status"]
-    return df[cols], f"{stamp:%d/%m/%Y %H:%M}"
+    return df[cols], f"{stamp:%d/%m/%Y à %H:%M}"
 
 
 def rebalancing_plan(current: pd.DataFrame, profile: pd.DataFrame, forecast: pd.DataFrame | None,

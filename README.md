@@ -13,9 +13,10 @@ MLflow · scikit-learn · Power BI (DirectQuery, DAX) · Streamlit · Plotly · 
 
 ## Application web (Streamlit)
 
-Neuf pages qui reprennent les tables gold : vue d'ensemble, disponibilité en direct (carte des stations),
-fréquentation, effet de la météo, stations saturées, segmentation, prévision 24 h, rééquilibrage et
-pipeline & qualité.
+Site entièrement en français et en langage simple, pensé pour un public non technique (thème sombre, fenêtre de
+présentation à l'ouverture). Neuf pages qui reprennent les tables gold : accueil, les vélos en ce moment (carte des
+stations), quand roule-t-on ?, l'effet de la météo, stations à problème, familles de stations, prévisions 24 heures,
+déplacer les vélos et comment ça marche.
 
 ```bash
 pip install -r requirements.txt

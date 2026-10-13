@@ -1,4 +1,4 @@
-"""Rééquilibrage : plan d'action avant la prochaine pointe, calculé avec le code du projet (src/mobility)."""
+"""Déplacer les vélos : plan conseillé avant la prochaine heure de pointe (code du projet, src/mobility)."""
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -6,91 +6,83 @@ import streamlit as st
 from lib import data, live, ui
 from views.realtime import LIVE, TABLE, current_state
 
-DAYS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."]
+DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+WINDOWS = {"Pointe du matin": "l'heure de pointe du matin", "Pointe du soir": "l'heure de pointe du soir",
+           "Après-midi week-end": "l'après-midi du week-end"}
+
+
+def short(s: pd.Series) -> pd.Series:
+    return s.str.replace(r"^\d+ - ", "", regex=True)
 
 
 def render() -> None:
-    ui.page_header("Aide à la décision", "Rééquilibrage avant la prochaine pointe",
-                   "Projection du stock de chaque station en fin de pointe (stock actuel + flux net attendu, issu de la "
-                   "prévision ML si elle couvre la fenêtre, sinon du profil historique), seuils bas / haut "
-                   "(2 vélos ou 15 % de la capacité), quantité pour revenir à 50 %, puis appariement glouton des "
-                   "stations à délester vers les stations à réapprovisionner les plus proches (≤ 3 km).")
+    ui.page_header("Agir", "Déplacer les vélos avant l'heure de pointe",
+                   "Avant chaque heure de pointe, l'application estime combien de vélos il restera dans chaque station "
+                   "à la fin de la pointe. Elle repère celles qui risquent d'être vides ou pleines, puis propose de "
+                   "déplacer des vélos d'une station trop pleine vers une station proche (moins de 3 km) qui en manquera.")
     profile = data.load("saturation_profile")
     if profile is None or profile.empty:
-        ui.missing("Profils de saturation")
+        ui.missing("Les habitudes des stations")
         return
 
-    choice = st.segmented_control("État de départ", [TABLE, LIVE], default=TABLE, key="rb_source") or TABLE
+    choice = st.segmented_control("Point de départ", [TABLE, LIVE], default=TABLE, key="rb_source") or TABLE
     cur, stamp = current_state(choice)
     if cur is None:
-        ui.missing("Disponibilité courante")
+        ui.missing("L'état des stations")
         return
-    now = (pd.Timestamp(cur.snapshot_local.max()) if choice == LIVE and "API" in stamp else data.reference_time())
+    now = pd.Timestamp(cur.snapshot_local.max()) if choice == LIVE else data.reference_time()
     plan = live.rebalancing_plan(cur, profile, data.load("forecast_station_hourly"), now)
     start, end, label, _ = plan["window"]
     state, moves = plan["state"], plan["moves"]
     if state.empty:
-        st.info("Aucune station ouverte.")
+        st.info("Aucune station ouverte pour le moment.")
         return
 
-    src = state.flow_source.value_counts()
-    st.markdown(f"#### :material/event: {label} · {DAYS[start.weekday()]} {start:%d/%m} {start:%H:%M}–{end:%H:%M}")
-    st.caption(f"État de départ : {stamp} · flux attendu : " + ", ".join(f"{k} ({v} stations)" for k, v in src.items()))
+    st.markdown(f"#### :material/event: Préparer {WINDOWS.get(label, label)} : {DAYS[start.weekday()]} "
+                f"{start:%d/%m}, de {start:%H} h à {end:%H} h")
+    st.caption(f"État des stations au {stamp}.")
+    if choice == LIVE and data.source().mode == "demo":
+        st.caption(":material/info: L'état réel des stations est combiné ici aux habitudes simulées de la "
+                   "démonstration : le plan illustre la méthode, ce n'est pas une consigne réelle.")
 
     need = state[state.action == "REAPPROVISIONNER"]
     excess = state[state.action == "DELESTER"]
     covered = need.bikes_covered_by_pairing.sum() / need.bikes_to_move.sum() if need.bikes_to_move.sum() else 0
-    dist = f"{ui.fmt_num(moves.distance_km.mean(), 1)} km en moy." if not moves.empty else None
     ui.kpis([
-        ("À réapprovisionner", ui.fmt_int(len(need)), f"+{ui.fmt_int(need.bikes_to_move.sum())} vélos",
-         "Stations sous le seuil bas en fin de pointe ; vélos à apporter pour revenir à 50 %", "off"),
-        ("À délester", ui.fmt_int(len(excess)), f"-{ui.fmt_int(excess.bikes_to_move.sum())} vélos",
-         "Stations au-dessus du seuil haut en fin de pointe ; vélos à retirer", "off"),
-        ("Mouvements proposés", ui.fmt_int(len(moves)), dist, "Appariements station à délester → station à remplir", "off"),
-        ("Besoin couvert", ui.fmt_pct(covered), None, "Part des vélos à apporter fournie par une station à délester ≤ 3 km"),
+        ("Stations à remplir", ui.fmt_int(len(need)), f"{ui.fmt_int(need.bikes_to_move.sum())} vélos à apporter", None),
+        ("Stations à alléger", ui.fmt_int(len(excess)), f"{ui.fmt_int(excess.bikes_to_move.sum())} vélos à retirer", None),
+        ("Trajets de camion", ui.fmt_int(len(moves)),
+         f"{ui.fmt_num(moves.distance_km.mean(), 1)} km en moyenne" if not moves.empty else None, None),
+        ("Besoin couvert", ui.fmt_pct(covered), "grâce aux stations proches",
+         "Part des vélos à apporter qui peuvent venir d'une station trop pleine à moins de 3 km"),
     ])
-    if choice == LIVE and data.source().mode == "demo":
-        st.caption(":material/info: État réel de l'API combiné aux profils et prévisions de la démo (simulés) : "
-                   "le plan illustre la mécanique, pas un besoin opérationnel réel.")
 
     left, right = st.columns([1.35, 1])
     with left:
-        shown = state.assign(action_label=state.action.map(ui.ACTION_LABEL))
         colors = {ui.ACTION_LABEL[k]: v for k, v in ui.ACTION.items()}
-        shown = shown.assign(size=shown.bikes_to_move.clip(lower=1))
+        shown = state.assign(action_label=state.action.map(ui.ACTION_LABEL), size=state.bikes_to_move.clip(lower=1))
         fig = ui.station_map(shown.sort_values("action", ascending=False), "action_label", colors, size="size",
                              height=560, size_max=16,
                              hover={"available_bikes": True, "projected_bikes": ":.0f", "bikes_to_move": True,
-                                    "flow_source": True, "size": False, "action_label": False, "lat": False, "lon": False})
+                                    "size": False, "action_label": False, "lat": False, "lon": False},
+                             labels={"available_bikes": "Vélos maintenant", "projected_bikes": "Vélos en fin de pointe",
+                                     "bikes_to_move": "Vélos à déplacer"})
         if not moves.empty:
             lat, lon = [], []
             for r in moves.itertuples():
                 lat += [r.from_lat, r.to_lat, None]
                 lon += [r.from_lon, r.to_lon, None]
-            fig.add_trace(go.Scattermap(lat=lat, lon=lon, mode="lines", line=dict(width=1.5, color="rgba(82,81,78,0.75)"),
-                                        name="Mouvement proposé", hoverinfo="skip"))
+            fig.add_trace(go.Scattermap(lat=lat, lon=lon, mode="lines", line=dict(width=1.5, color="rgba(240,239,236,0.55)"),
+                                        name="Trajet de camion", hoverinfo="skip"))
         ui.plot(fig, key="rb_map")
     with right:
-        ui.section("Mouvements proposés", "Par station à réapprovisionner, de la plus prioritaire à la moins prioritaire")
+        ui.section("Trajets conseillés", "Les stations les plus urgentes d'abord")
         if moves.empty:
-            st.info("Aucun appariement possible à moins de 3 km.")
+            st.info("Aucun déplacement possible à moins de 3 km.")
         else:
-            short = moves.assign(**{c: moves[c].str.replace(r"^\d+ - ", "", regex=True) for c in ["from_label", "to_label"]})
-            st.dataframe(short[["from_label", "to_label", "bikes"]], hide_index=True, height=520,
-                         width="stretch", column_config={
-                             "from_label": "Depuis", "to_label": "Vers",
-                             "bikes": st.column_config.NumberColumn("Vélos", width=50)})
+            m = moves.assign(frm=short(moves.from_label), to=short(moves.to_label))
+            ui.table(m, {"frm": "Prendre à", "to": "Déposer à", "bikes": "Vélos"}, num=("bikes",), height=500)
 
-    ui.section("Stations à traiter", "Triées par priorité = quantité × (1 + fréquence de saturation historique sur ce créneau)")
-    todo = state[state.action != "OK"].sort_values("priority", ascending=False).assign(
-        action=lambda d: d.action.map(ui.ACTION_LABEL))
-    st.dataframe(todo[["station_label", "action", "available_bikes", "expected_net_flow", "projected_bikes", "capacity",
-                       "bikes_to_move", "bikes_covered_by_pairing", "priority"]], hide_index=True, width="stretch",
-                 height=360, column_config={
-                     "station_label": "Station", "action": "Action", "available_bikes": "Vélos actuels",
-                     "expected_net_flow": st.column_config.NumberColumn("Flux net attendu", format="%+.1f"),
-                     "projected_bikes": st.column_config.NumberColumn("Vélos projetés", format="%.0f"),
-                     "capacity": "Capacité", "bikes_to_move": "À déplacer", "bikes_covered_by_pairing": "Couverts",
-                     "priority": st.column_config.NumberColumn("Priorité", format="%.1f")})
-    st.caption("Logique : `src/mobility/rebalancing.py` (fonctions testées unitairement : `next_peak_window`, "
-               "`classify_station`, `pair_moves`) — identique au notebook `07_recommendations.py`.")
+    ui.insight(f"En déplaçant <b>{ui.fmt_int(moves.bikes.sum() if not moves.empty else 0)} vélos</b> avant la pointe, "
+               f"on couvre <b>{ui.fmt_pct(covered)}</b> des besoins des stations qui en manqueront. Le reste ne peut "
+               "pas être fourni par une station voisine trop pleine.")

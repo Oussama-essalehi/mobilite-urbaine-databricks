@@ -1,72 +1,93 @@
-"""Charte graphique et composants partagés : palette, CSS, en-têtes, KPI, graphiques Plotly, tables."""
+"""Charte graphique (thème sombre) et composants partagés : en-têtes, chiffres clés, graphiques, tableaux."""
 from __future__ import annotations
+
+import html
+import math
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-# --- Palette (ordre catégoriel fixe, validé daltonisme) -------------------------------------------------
-SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
+# --- Palette sombre (ordre fixe des couleurs, validé pour le daltonisme) ---------------------------------
+SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"]
 BLUE, ORANGE, AQUA = SERIES[0], SERIES[1], SERIES[2]
+RED = "#e66767"
 MUTED = "#898781"
-GRID = "rgba(137,135,129,0.22)"
-SEQ_BLUE = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
-DIVERGING = [[0, "#d03b3b"], [0.5, "#f0efec"], [1, "#2a78d6"]]
+INK_2 = "#c3c2b7"
+GRID = "#2c2c2a"
+SURFACE = "#1a1a19"
+SEQ_BLUE = ["#0d366b", "#184f95", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"]
 
-# Statuts : manque de vélos côté rouge, manque de bornes côté bleu, nominal en vert
+# Statuts : manque de vélos côté rouge, manque de places côté bleu, normal en vert
 AVAILABILITY = {
     "Vide": "#d03b3b",
     "Presque vide": "#ec835a",
     "Disponible": "#0ca30c",
-    "Presque pleine": "#6da7ec",
-    "Pleine": "#184f95",
-    "Fermée": "#898781",
+    "Presque pleine": "#9ec5f4",
+    "Pleine": "#3987e5",
+    "Fermée": "#6b6a65",
 }
-ACTION = {"REAPPROVISIONNER": "#d03b3b", "DELESTER": "#184f95", "OK": "#b5b3ab"}
-ACTION_LABEL = {"REAPPROVISIONNER": "À réapprovisionner", "DELESTER": "À délester", "OK": "Équilibrée"}
+ACTION = {"REAPPROVISIONNER": "#d03b3b", "DELESTER": "#3987e5", "OK": "#55544f"}
+ACTION_LABEL = {"REAPPROVISIONNER": "Ajouter des vélos", "DELESTER": "Retirer des vélos", "OK": "Rien à faire"}
 DAY_TYPE = {"Semaine": BLUE, "Week-end": ORANGE}
 
-PLOTLY_CONFIG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"]}
+# Barre d'outils Plotly masquée : ses infobulles sont en anglais
+PLOTLY_CONFIG = {"displayModeBar": False, "scrollZoom": False}
 
 CSS = """
 <style>
-:root { --accent:#2a78d6; --ink-2:#52514e; --muted:#898781; --hair:rgba(11,11,11,.10); }
+:root { --accent:#3987e5; --ink:#f0efec; --ink-2:#c3c2b7; --muted:#9a988f; --hair:rgba(255,255,255,.10);
+        --surface:#1a1a19; }
 .block-container { padding-top: 4.6rem; padding-bottom: 3rem; max-width: 1320px; }
 h1, h2, h3 { letter-spacing: -0.01em; }
-[data-testid="stMetric"] { padding: 14px 16px 12px; border-radius: 12px; }
-[data-testid="stMetricLabel"] p { font-size: .82rem; color: var(--ink-2); font-weight: 500; }
+/* éléments d'interface Streamlit en anglais */
+[data-testid="stMainMenu"], [data-testid="stStatusWidget"], [data-testid="stToolbarActions"],
+[data-testid="stElementToolbar"], [data-testid="stAppDeployButton"] { display: none !important; }
+[data-testid="stMetric"] { padding: 14px 16px 12px; border-radius: 12px; background: var(--surface);
+                           border: 1px solid var(--hair); }
+[data-testid="stMetricLabel"] p { font-size: .85rem; color: var(--ink-2); font-weight: 500; }
 [data-testid="stMetricValue"] { font-size: 1.75rem; font-weight: 650; }
 .page-eyebrow { font-size: .78rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
                 color: var(--accent); margin-bottom: .1rem; }
 .page-title { font-size: 2.05rem; font-weight: 700; line-height: 1.15; margin: 0 0 .35rem; }
-.page-sub { color: var(--ink-2); font-size: 1.02rem; max-width: 900px; margin-bottom: 1.1rem; }
-.section { font-size: 1.12rem; font-weight: 650; margin: 1.4rem 0 .15rem; }
-.section-sub { color: var(--muted); font-size: .88rem; margin-bottom: .55rem; }
-.insight { border-left: 3px solid var(--accent); padding: .55rem .9rem; margin: .4rem 0 .9rem;
-           background: rgba(42,120,214,.06); border-radius: 0 8px 8px 0; font-size: .95rem; }
-.insight b { font-weight: 650; }
-.tag { display:inline-block; padding: 3px 10px; margin: 0 6px 6px 0; border-radius: 999px;
-       border: 1px solid var(--hair); font-size: .8rem; color: var(--ink-2); background: rgba(127,127,127,.06); }
-.hero { padding: 28px 30px 22px; border-radius: 16px; margin-bottom: 1.2rem;
-        background: linear-gradient(135deg, rgba(42,120,214,.12), rgba(27,175,122,.08) 60%, rgba(235,104,52,.06));
-        border: 1px solid var(--hair); }
-.hero h1 { font-size: 2.35rem; margin: 0 0 .4rem; line-height: 1.1; }
-.hero p { font-size: 1.07rem; color: var(--ink-2); max-width: 860px; margin: 0 0 .9rem; }
-.flow { display:grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px; margin: .4rem 0 1rem; }
-@media (max-width: 1100px) { .flow { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } }
-.flow .step { position: relative; border: 1px solid var(--hair); border-radius: 12px;
-              padding: 10px 12px; background: rgba(127,127,127,.04); }
-.flow .step .k { font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.flow .step .t { font-weight: 650; font-size: .95rem; margin: 2px 0 4px; }
-.flow .step .d { font-size: .8rem; color: var(--ink-2); line-height: 1.35; }
-.flow .step:not(:last-child)::after { content: "›"; position: absolute; right: -11px; top: 50%;
-              transform: translateY(-50%); color: var(--muted); font-size: 1.1rem; }
-.card { border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px; height: 100%; }
-.card .t { font-weight: 650; margin-bottom: 4px; }
-.card .d { font-size: .88rem; color: var(--ink-2); line-height: 1.45; }
-.legend-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:baseline; }
-.src-badge { font-size: .8rem; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--hair); line-height: 1.4; }
-.src-badge b { display:block; font-size: .85rem; }
+.page-sub { color: var(--ink-2); font-size: 1.05rem; max-width: 880px; margin-bottom: 1.1rem; line-height: 1.55; }
+.section { font-size: 1.15rem; font-weight: 650; margin: 1.5rem 0 .15rem; }
+.section-sub { color: var(--muted); font-size: .9rem; margin-bottom: .55rem; }
+.insight { border-left: 3px solid var(--accent); padding: .65rem 1rem; margin: .5rem 0 1rem;
+           background: rgba(57,135,229,.10); border-radius: 0 8px 8px 0; font-size: .97rem; line-height: 1.55; }
+.insight .k { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+              color: var(--accent); display: block; margin-bottom: 2px; }
+.hero { padding: 30px 32px 26px; border-radius: 16px; margin-bottom: 1.2rem; border: 1px solid var(--hair);
+        background: linear-gradient(135deg, rgba(57,135,229,.20), rgba(25,158,112,.10) 60%, rgba(217,89,38,.08)); }
+.hero h1 { font-size: 2.3rem; margin: 0 0 .5rem; line-height: 1.12; }
+.hero p { font-size: 1.08rem; color: var(--ink-2); max-width: 880px; margin: 0; line-height: 1.6; }
+.steps { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: .4rem 0 1rem; }
+@media (max-width: 1000px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.step { border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
+.step .n { display:inline-flex; width: 26px; height: 26px; border-radius: 50%; align-items:center; justify-content:center;
+           font-weight: 700; font-size: .85rem; color: #111110; margin-bottom: 8px; }
+.step .t { font-weight: 650; font-size: 1rem; margin-bottom: 4px; }
+.step .d { font-size: .88rem; color: var(--ink-2); line-height: 1.5; }
+.card { border: 1px solid var(--hair); border-radius: 12px; padding: 16px 18px; height: 100%; background: var(--surface);
+        box-sizing: border-box; }
+[data-testid="stColumn"] [data-testid="stMarkdownContainer"]:has(> div > .card) { height: 100%; }
+.card .k { font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.card .v { font-size: 1.6rem; font-weight: 700; margin: 2px 0 4px; }
+.card .d { font-size: .9rem; color: var(--ink-2); line-height: 1.5; }
+.legend-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+.src-badge { font-size: .8rem; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--hair); line-height: 1.45;
+             background: var(--surface); color: var(--ink-2); }
+.src-badge b { display:block; font-size: .86rem; color: var(--ink); }
+.tbl-wrap { border: 1px solid var(--hair); border-radius: 10px; overflow: auto; background: var(--surface); }
+table.tbl { width: 100%; border-collapse: collapse; font-size: .88rem; }
+table.tbl th { position: sticky; top: 0; background: #232321; color: var(--ink-2); font-weight: 600; text-align: left;
+               padding: 8px 10px; border-bottom: 1px solid var(--hair); white-space: nowrap; }
+table.tbl td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,.05); color: var(--ink); }
+table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar { display:flex; align-items:center; gap:8px; min-width: 110px; }
+.bar .track { flex: 1; height: 6px; border-radius: 3px; background: rgba(255,255,255,.08); }
+.bar .fill { height: 6px; border-radius: 3px; }
+.bar .lab { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: .82rem; width: 38px; text-align: right; }
 footer { visibility: hidden; }
 </style>
 """
@@ -86,38 +107,66 @@ def section(title: str, subtitle: str | None = None) -> None:
                 unsafe_allow_html=True)
 
 
-def insight(html: str) -> None:
-    st.markdown(f'<div class="insight">{html}</div>', unsafe_allow_html=True)
+def insight(text: str, label: str = "À retenir") -> None:
+    st.markdown(f'<div class="insight"><span class="k">{label}</span>{text}</div>', unsafe_allow_html=True)
 
 
 def kpis(items: list[tuple]) -> None:
-    """items : (libellé, valeur, delta | None, aide | None[, delta_color])"""
+    """items : (libellé, valeur, sous-texte | None, aide | None)"""
     cols = st.columns(len(items))
     for col, item in zip(cols, items):
         label, value, delta, help_ = (list(item) + [None] * 4)[:4]
-        delta_color = item[4] if len(item) > 4 else "normal"
-        col.metric(label, value, delta, help=help_, border=True, delta_color=delta_color)
+        col.metric(label, value, delta, help=help_, delta_color="off", delta_arrow="off")
 
 
 def missing(what: str) -> None:
-    st.info(f"{what} — table non disponible sur cette source (le job correspondant ne l'a pas encore produite).",
-            icon=":material/hourglass_empty:")
+    st.info(f"{what} : ces données ne sont pas encore disponibles. Elles apparaîtront après les premières "
+            "exécutions automatiques du traitement.", icon=":material/hourglass_empty:")
+
+
+def table(df: pd.DataFrame, columns: dict, bars: dict | None = None, height: int | None = None,
+          num: tuple = ()) -> None:
+    """Tableau HTML en français, sans menus en anglais.
+
+    columns : {colonne: titre} ; bars : {colonne: couleur} pour une jauge 0-1 ; num : colonnes alignées à droite.
+    """
+    bars = bars or {}
+    head = "".join(f'<th class="{"num" if c in num else ""}">{html.escape(t)}</th>' for c, t in columns.items())
+    rows = []
+    for _, r in df.iterrows():
+        cells = []
+        for c in columns:
+            v = r[c]
+            if c in bars:
+                pct = 0 if pd.isna(v) else max(0.0, min(1.0, float(v)))
+                cells.append(f'<td><div class="bar"><div class="track"><div class="fill" style="width:{pct * 100:.0f}%;'
+                             f'background:{bars[c]}"></div></div><span class="lab">{pct * 100:.0f} %</span></div></td>')
+            else:
+                cells.append(f'<td class="{"num" if c in num else ""}">{html.escape("" if pd.isna(v) else str(v))}</td>')
+        rows.append("<tr>" + "".join(cells) + "</tr>")
+    style_ = f' style="max-height:{height}px"' if height else ""
+    st.markdown(f'<div class="tbl-wrap"{style_}><table class="tbl"><thead><tr>{head}</tr></thead>'
+                f'<tbody>{"".join(rows)}</tbody></table></div>', unsafe_allow_html=True)
 
 
 # --- Plotly --------------------------------------------------------------------------------------------
 
 def style(fig: go.Figure, height: int = 360, legend: bool = True, hover: str = "x unified") -> go.Figure:
-    has_title = bool(fig.layout.title.text)
     fig.update_layout(
-        height=height, margin=dict(l=8, r=8, t=44 if has_title else 36 if legend else 12, b=8),
-        font=dict(family="system-ui, -apple-system, 'Segoe UI', sans-serif", size=13),
+        height=height, margin=dict(l=8, r=8, t=36 if legend else 12, b=8),
+        font=dict(family="system-ui, -apple-system, 'Segoe UI', sans-serif", size=13, color=INK_2),
         hovermode=hover, showlegend=legend, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0, title_text="",
                     bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(font_size=12),
+        hoverlabel=dict(font_size=12, bgcolor="#232321", bordercolor=GRID, font_color="#f0efec"),
+        separators=", ",
     )
-    fig.update_xaxes(showgrid=False, linecolor=GRID, ticks="", title_font=dict(size=12, color=MUTED))
-    fig.update_yaxes(gridcolor=GRID, zeroline=False, linecolor=GRID, title_font=dict(size=12, color=MUTED))
+    fig.update_xaxes(showgrid=False, linecolor=GRID, ticks="", automargin=True, tickfont=dict(color=INK_2),
+                     exponentformat="none", separatethousands=True,
+                     title_font=dict(size=12, color=MUTED))
+    fig.update_yaxes(gridcolor=GRID, zeroline=False, linecolor=GRID, automargin=True, tickfont=dict(color=INK_2),
+                     exponentformat="none", separatethousands=True,
+                     title_font=dict(size=12, color=MUTED))
     return fig
 
 
@@ -130,9 +179,9 @@ CLUSTER_SLOTS = {"Résidentielle": 0, "Pôle d'activité": 1, "Équilibrée": 2,
 
 
 def cluster_colors(labels) -> dict:
-    """Couleur fixe par type de segment (jamais par rang), libellés dédoublonnés sur les créneaux libres."""
+    """Couleur fixe par type de famille (jamais par rang)."""
     out, used = {}, set()
-    for lab in sorted(set(labels)):
+    for lab in sorted({str(x) for x in labels if pd.notna(x)}):
         slot = next((s for k, s in CLUSTER_SLOTS.items() if lab.startswith(k)), None)
         if slot is None or slot in used:
             slot = next(i for i in range(len(SERIES)) if i not in used and i not in CLUSTER_SLOTS.values())
@@ -141,44 +190,44 @@ def cluster_colors(labels) -> dict:
     return out
 
 
-def map_style() -> str:
-    return "carto-darkmatter" if st.context.theme.type == "dark" else "carto-positron"
-
-
 def station_map(df: pd.DataFrame, color: str, color_map: dict, hover: dict, size: str | None = None,
-                height: int = 540, zoom: float = 11.4, size_max: int = 13) -> go.Figure:
+                height: int = 540, zoom: float = 11.4, size_max: int = 13, labels: dict | None = None) -> go.Figure:
     import plotly.express as px
 
     fig = px.scatter_map(
         df, lat="lat", lon="lon", color=color, color_discrete_map=color_map,
         category_orders={color: [c for c in color_map if c in set(df[color])]},
-        size=size, size_max=size_max, hover_name="station_label", hover_data=hover,
-        zoom=zoom, center=TOULOUSE, map_style=map_style(), height=height,
+        size=size, size_max=size_max, hover_name="station_label", hover_data=hover, labels=labels or {},
+        zoom=zoom, center=TOULOUSE, map_style="carto-darkmatter", height=height,
     )
     if size is None:
         fig.update_traces(marker=dict(size=9))
-    fig.update_traces(marker=dict(opacity=0.9))
-    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), legend=dict(
-        orientation="h", yanchor="top", y=0.99, xanchor="left", x=0.01, title_text="",
-        bgcolor="rgba(255,255,255,0.85)" if map_style() == "carto-positron" else "rgba(26,26,25,0.85)"))
+    fig.update_traces(marker=dict(opacity=0.92))
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), font=dict(color=INK_2),
+                      hoverlabel=dict(bgcolor="#232321", bordercolor=GRID, font_color="#f0efec"),
+                      legend=dict(orientation="h", yanchor="top", y=0.99, xanchor="left", x=0.01, title_text="",
+                                  bgcolor="rgba(26,26,25,0.88)", font=dict(color="#f0efec")))
     return fig
 
 
-def data_table(df: pd.DataFrame, label: str = "Voir les données", **kwargs) -> None:
-    with st.expander(label, icon=":material/table:"):
-        st.dataframe(df, width="stretch", hide_index=True, **kwargs)
+# --- Formats français -----------------------------------------------------------------------------------
+
+def _bad(x) -> bool:
+    return x is None or (isinstance(x, float) and math.isnan(x))
 
 
-def fmt_int(x: float) -> str:
-    return f"{x:,.0f}".replace(",", " ")
+def fmt_int(x) -> str:
+    return "–" if _bad(x) else f"{x:,.0f}".replace(",", " ")
 
 
-def fmt_pct(x: float, digits: int = 0, signed: bool = False) -> str:
+def fmt_pct(x, digits: int = 0, signed: bool = False) -> str:
+    if _bad(x):
+        return "–"
     if round(x * 100, digits) == 0:
         x, signed = 0.0, False
     s = f"{x * 100:+.{digits}f}" if signed else f"{x * 100:.{digits}f}"
-    return s.replace(".", ",") + " %"
+    return s.replace(".", ",").replace("-", "−") + " %"
 
 
-def fmt_num(x: float, digits: int = 2) -> str:
-    return f"{x:.{digits}f}".replace(".", ",")
+def fmt_num(x, digits: int = 2) -> str:
+    return "–" if _bad(x) else f"{x:.{digits}f}".replace(".", ",")

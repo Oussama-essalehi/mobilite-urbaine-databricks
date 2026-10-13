@@ -1,107 +1,95 @@
-"""Vue d'ensemble : pitch du projet, chiffres clés, architecture, résultats."""
+"""Accueil : le projet en quelques mots, les chiffres clés et les grands enseignements."""
 import pandas as pd
 import streamlit as st
 
 from lib import data, ui
 
-STACK = ["Databricks serverless", "PySpark", "Spark SQL", "Delta Lake", "Auto Loader", "Unity Catalog", "MLflow",
-         "scikit-learn", "Databricks Asset Bundles", "GitHub Actions", "Power BI DirectQuery", "Streamlit"]
-
-FLOW = [
-    ("Sources", "#2a78d6", "API temps réel", "GBFS VélôToulouse + Open-Meteo, toutes les 15 min, reprises avec backoff"),
-    ("Landing", "#6250d6", "JSON brut", "Une réponse par fichier, volume Unity Catalog partitionné par date"),
-    ("Bronze", "#eb6834", "Auto Loader", "Ingestion incrémentale, payload conservé en texte : robuste aux changements de schéma"),
-    ("Silver", "#898781", "Qualité intégrée", "MERGE idempotent, 12 expectations SQL, quarantaine, contrôle de fraîcheur"),
-    ("Gold", "#eda100", "Modèle métier", "Faits station × heure, saturation, effet météo, disponibilité courante"),
-    ("ML", "#1baf7a", "MLflow", "Segmentation KMeans et prévision 24 h par gradient boosting, suivies et versionnées"),
-    ("Décision", "#e34948", "Rééquilibrage", "Stations à réapprovisionner / délester avant chaque pointe, tournées ≤ 3 km"),
+STEPS = [
+    ("#3987e5", "Collecter", "Toutes les 15 minutes, le nombre de vélos et de places libres de chaque station, "
+                             "et la météo de Toulouse."),
+    ("#c98500", "Vérifier et ranger", "Les données incohérentes sont écartées automatiquement, le reste est "
+                                      "organisé pour être analysé rapidement."),
+    ("#199e70", "Analyser", "Heures d'affluence, effet de la pluie, stations souvent vides ou pleines, familles "
+                            "de stations."),
+    ("#d95926", "Prévoir et conseiller", "Affluence des 24 prochaines heures et vélos à déplacer avant chaque "
+                                         "heure de pointe."),
 ]
 
 PAGES = [
-    (":material/location_on:", "Disponibilité en direct", "Carte des 460+ stations : vélos, bornes, stations vides ou pleines."),
-    (":material/monitoring:", "Fréquentation", "Départs estimés, profils semaine / week-end, carte de chaleur, top stations."),
-    (":material/rainy:", "Effet de la météo", "Impact de la pluie et de la température à heure comparable."),
-    (":material/warning:", "Stations saturées", "Classement aux heures de pointe et profil horaire de chaque station."),
-    (":material/hub:", "Segmentation", "Typologie des stations par KMeans : résidentielles, pôles d'activité…"),
-    (":material/query_stats:", "Prévision 24 h", "Départs et arrivées par station, gain vs baseline, importance des variables."),
-    (":material/local_shipping:", "Rééquilibrage", "Plan d'action avant la prochaine pointe et mouvements proposés."),
-    (":material/account_tree:", "Pipeline & qualité", "Jobs planifiés, couches médaillon, journal des contrôles qualité."),
+    (":material/location_on:", "Les vélos en ce moment", "La carte de toutes les stations : où trouver un vélo, où le rendre."),
+    (":material/schedule:", "Quand roule-t-on ?", "Les jours et les heures où les vélos sont le plus utilisés."),
+    (":material/rainy:", "L'effet de la météo", "Combien de trajets en moins quand il pleut."),
+    (":material/warning:", "Stations à problème", "Les stations souvent vides ou pleines aux heures de pointe."),
+    (":material/category:", "Familles de stations", "Les stations regroupées selon leur comportement dans la journée."),
+    (":material/insights:", "Prévisions 24 heures", "Combien de vélos vont partir et arriver dans les prochaines heures."),
+    (":material/local_shipping:", "Déplacer les vélos", "Le plan conseillé pour remettre des vélos là où il en manquera."),
+    (":material/settings:", "Comment ça marche", "Les coulisses : collecte automatique et contrôles de qualité."),
 ]
 
 
 def render() -> None:
-    src = data.source()
-    tags = "".join(f'<span class="tag">{t}</span>' for t in STACK)
     st.markdown(
-        f"""<div class="hero"><div class="page-eyebrow">Data engineering · Machine learning · Aide à la décision</div>
-        <h1>Mobilité urbaine à Toulouse</h1>
-        <p>Pipeline de données de bout en bout sur <b>Databricks</b> autour des vélos en libre-service
-        <b>VélôToulouse</b> et de la météo : collecte temps réel, architecture médaillon sur Delta Lake avec contrôles
-        qualité, segmentation des stations et prévision de la fréquentation suivies dans MLflow, puis recommandations
-        de rééquilibrage avant chaque heure de pointe.</p>{tags}</div>""",
+        """<div class="hero"><div class="page-eyebrow">Projet de données · Toulouse</div>
+        <h1>Les vélos en libre-service de Toulouse, analysés automatiquement</h1>
+        <p>Ce projet observe en continu les stations VélôToulouse et la météo, puis transforme ces données en réponses
+        simples : quand et où les Toulousains prennent le vélo, ce que change la pluie, quelles stations manquent de
+        vélos ou de places, et comment mieux répartir les vélos avant les heures de pointe.</p></div>""",
         unsafe_allow_html=True)
 
     dim, net, cur = data.load("dim_station"), data.load("network_hourly"), data.load("station_current")
-    metrics, clusters, effect = data.load("model_metrics"), data.load("station_clusters"), data.load("weather_effect")
+    metrics, effect, ranking = data.load("model_metrics"), data.load("weather_effect"), data.load("saturation_ranking")
 
     items = []
     if dim is not None:
-        items.append(("Stations suivies", ui.fmt_int(len(dim)), None, "Référentiel issu du flux GBFS (silver_stations)"))
+        items.append(("Stations observées", ui.fmt_int(len(dim)), "dans la métropole", None))
     if net is not None and not net.empty:
         today = net.date_local.max()
         daily = net[net.date_local < today].groupby("date_local").total_departures.sum()
-        items.append(("Départs / jour", ui.fmt_int(daily.tail(7).mean()), None,
-                      "Moyenne des 7 derniers jours complets. Estimation par variation de stock (minorant)."))
+        items.append(("Trajets par jour", ui.fmt_int(daily.tail(7).mean()), "moyenne des 7 derniers jours",
+                      "Estimation à partir des vélos qui quittent les stations"))
     if cur is not None and not cur.empty:
-        open_ = cur[cur.status == "OPEN"]
-        share = (open_.availability_status == "Disponible").mean()
-        items.append(("Stations OK", ui.fmt_pct(share), None, "Part des stations ouvertes ni vides ni pleines"))
+        share = (cur[cur.status == "OPEN"].availability_status == "Disponible").mean()
+        items.append(("Stations sans souci", ui.fmt_pct(share), "à la dernière mesure",
+                      "Stations ni vides, ni pleines, ni sur le point de l'être"))
     if metrics is not None and not metrics.empty:
         last = metrics[metrics.target == "departures"].sort_values("trained_at").iloc[-1]
-        items.append(("Gain du modèle", ui.fmt_pct(last.skill_vs_baseline), None,
-                      "Réduction de la MAE des départs prévus par rapport à la baseline saisonnière (J-7)"))
-    if clusters is not None and not clusters.empty:
-        items.append(("Segments", f"{clusters.k.iloc[0]}", None,
-                      f"KMeans, silhouette {ui.fmt_num(clusters.silhouette.iloc[0])}"))
+        items.append(("Prévisions plus justes", ui.fmt_pct(last.skill_vs_baseline), "qu'une méthode simple",
+                      "Comparé à « même heure, la semaine précédente »"))
     if items:
         ui.kpis(items)
 
-    ui.section("Architecture du pipeline", "Trois jobs planifiés déployés par Databricks Asset Bundle : collecte "
-               "(15 min), analytique (horaire), machine learning (chaque nuit).")
-    steps = "".join(
-        f'<div class="step"><div class="k" style="color:{c}">{i} · {k}</div><div class="t">{t}</div><div class="d">{d}</div></div>'
-        for i, (k, c, t, d) in enumerate(FLOW, 1))
-    st.markdown(f'<div class="flow">{steps}</div>', unsafe_allow_html=True)
+    ui.section("Comment ça marche, en 4 étapes", "Tout se fait automatiquement, jour et nuit.")
+    steps = "".join(f'<div class="step"><span class="n" style="background:{c}">{i}</span><div class="t">{t}</div>'
+                    f'<div class="d">{d}</div></div>' for i, (c, t, d) in enumerate(STEPS, 1))
+    st.markdown(f'<div class="steps">{steps}</div>', unsafe_allow_html=True)
 
     ui.section("Ce que disent les données")
     cards = []
     if effect is not None and not effect.empty:
         rain = effect[(effect.dimension == "Météo") & (effect.category == "Pluie")]
         if not rain.empty:
-            cards.append(("Pluie", ui.fmt_pct(rain.relative_to_reference.iloc[0] - 1, signed=True),
-                          "de départs sous la pluie, à heure et type de jour comparables."))
+            cards.append(("La pluie", ui.fmt_pct(rain.relative_to_reference.iloc[0] - 1),
+                          "de trajets quand il pleut, par rapport à une heure sans pluie."))
     if net is not None and not net.empty:
         wd = net[net.day_type == "Semaine"].groupby("hour_of_day").total_departures.mean()
-        cards.append(("Pic de demande", f"{wd.idxmax()} h",
-                      f"en semaine : {ui.fmt_int(wd.max())} départs/h en moyenne, {wd.max() / wd.mean():.1f}× la moyenne horaire."
-                      .replace(".", ",", 1)))
-    ranking = data.load("saturation_ranking")
+        cards.append(("Le pic de la journée", f"{wd.idxmax()} h",
+                      f"En semaine, c'est l'heure où l'on prend le plus de vélos : environ {ui.fmt_int(wd.max())} "
+                      "trajets en une heure."))
     if ranking is not None and not ranking.empty:
         n = int((ranking.pct_saturated_peak >= .25).sum())
-        cards.append(("Saturation", f"{n} stations",
-                      "vides ou pleines plus d'un quart du temps aux heures de pointe de semaine."))
+        cards.append(("Les stations à problème", f"{n}",
+                      "stations sont vides ou pleines plus d'un quart du temps aux heures de pointe."))
     if metrics is not None and not metrics.empty:
         last = metrics[metrics.target == "departures"].sort_values("trained_at").iloc[-1]
-        cards.append(("Prévision", f"MAE {ui.fmt_num(last.mae)}",
-                      f"départ par station et par heure, contre {ui.fmt_num(last.baseline_mae)} pour la baseline J-7."))
+        cards.append(("La prévision", f"± {ui.fmt_num(last.mae, 1)} vélo",
+                      "d'erreur en moyenne, par station et par heure, sur les départs prévus."))
     if cards:
         cols = st.columns(len(cards))
         for col, (k, v, d) in zip(cols, cards):
-            col.markdown(f'<div class="card"><div class="page-eyebrow">{k}</div>'
-                         f'<div class="page-title" style="font-size:1.6rem">{v}</div><div class="d">{d}</div></div>',
+            col.markdown(f'<div class="card"><div class="k">{k}</div><div class="v">{v}</div><div class="d">{d}</div></div>',
                          unsafe_allow_html=True)
 
-    ui.section("Explorer le tableau de bord", "Chaque page reprend une table gold du pipeline.")
+    ui.section("Que trouver sur ce site ?", "Le menu à gauche donne accès à chaque page.")
     for row in range(0, len(PAGES), 4):
         cols = st.columns(4)
         for col, (icon, title, desc) in zip(cols, PAGES[row:row + 4]):
@@ -110,12 +98,8 @@ def render() -> None:
                 st.caption(desc)
 
     st.space("small")
-    if src.mode == "demo":
-        meta = data.demo_meta()
-        st.caption(
-            f":material/info: **Données de démonstration.** Les {meta.get('n_stations', '')} stations (noms, positions, "
-            "capacités) proviennent du flux GBFS public ; l'historique horaire est simulé de façon réaliste, puis "
-            "traité par le même code que le pipeline (tables gold, KMeans, gradient boosting, rééquilibrage). "
-            "La page *Disponibilité en direct* interroge l'API réelle. Avec des identifiants Databricks, "
-            "l'application lit directement les tables gold du SQL warehouse.")
-    st.caption(f"Instant de référence des analyses : {pd.Timestamp(data.reference_time()):%d/%m/%Y %H:%M} (heure de Paris).")
+    if data.source().mode == "demo":
+        st.caption(":material/info: **À propos des données affichées.** Les stations (noms, emplacements, nombre de "
+                   "places) sont réelles. L'historique est simulé de façon réaliste pour la démonstration, puis traité "
+                   "exactement comme les vraies données. La page *Les vélos en ce moment* montre l'état réel, en direct.")
+    st.caption(f"Analyses calculées le {pd.Timestamp(data.reference_time()):%d/%m/%Y à %H:%M}.")

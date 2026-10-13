@@ -89,7 +89,7 @@ def _naive(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@st.cache_data(ttl=900, show_spinner="Requête sur le SQL warehouse Databricks…")
+@st.cache_data(ttl=900, show_spinner="Chargement des données depuis Databricks…")
 def _query_databricks(name: str, cfg_items: tuple) -> pd.DataFrame | None:
     from databricks import sql
 
@@ -101,7 +101,7 @@ def _query_databricks(name: str, cfg_items: tuple) -> pd.DataFrame | None:
                          session_configuration={"spark.sql.session.timeZone": "UTC"}) as conn:
             with conn.cursor() as cur:
                 cur.execute(QUERIES[name].format(T=T))
-                return _naive(cur.fetchall_arrow().to_pandas())
+                return _naive(cur.fetchall_arrow().to_pandas(date_as_object=False))
     except Exception as e:  # noqa: BLE001 — table absente (ML pas encore exécuté) ou erreur de requête
         if "TABLE_OR_VIEW_NOT_FOUND" in str(e):
             return None
@@ -130,17 +130,21 @@ def _probe_databricks(cfg_items: tuple) -> str | None:
         return str(e)[:300]
 
 
+def _fr_date(value: str | None) -> str:
+    return "?" if not value else f"{pd.Timestamp(value):%d/%m/%Y à %H:%M}"
+
+
 def source() -> Source:
     cfg = _databricks_config()
     err = None
     if cfg:
         err = _probe_databricks(tuple(sorted(cfg.items())))
         if err is None:
-            return Source("databricks", "Databricks · production",
-                          f"SQL warehouse · {cfg['catalog']}.{cfg['schema']}")
+            return Source("databricks", "Données réelles",
+                          "Lues en direct dans Databricks, mises à jour toutes les 15 minutes")
     meta = demo_meta()
-    return Source("demo", "Instantané de démonstration",
-                  f"Historique simulé · généré le {meta.get('generated_at', '?')[:16]}", error=err)
+    return Source("demo", "Données de démonstration",
+                  f"Historique simulé le {_fr_date(meta.get('generated_at'))}", error=err)
 
 
 def load(name: str) -> pd.DataFrame | None:
