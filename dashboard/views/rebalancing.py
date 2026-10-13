@@ -72,7 +72,7 @@ def render() -> None:
             for r in moves.itertuples():
                 lat += [r.from_lat, r.to_lat, None]
                 lon += [r.from_lon, r.to_lon, None]
-            fig.add_trace(go.Scattermap(lat=lat, lon=lon, mode="lines", line=dict(width=1.5, color="rgba(240,239,236,0.55)"),
+            fig.add_trace(go.Scattermap(lat=lat, lon=lon, mode="lines", line=dict(width=2, color=ui.MAP_LINE),
                                         name="Trajet de camion", hoverinfo="skip"))
         ui.plot(fig, key="rb_map")
     with right:

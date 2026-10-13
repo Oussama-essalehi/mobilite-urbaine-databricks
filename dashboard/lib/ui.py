@@ -23,7 +23,7 @@ AVAILABILITY = {
     "Vide": "#d03b3b",
     "Presque vide": "#ec835a",
     "Disponible": "#0ca30c",
-    "Presque pleine": "#9ec5f4",
+    "Presque pleine": "#6da7ec",
     "Pleine": "#3987e5",
     "Fermée": "#6b6a65",
 }
@@ -177,6 +177,13 @@ def plot(fig: go.Figure, key: str | None = None) -> None:
 
 
 TOULOUSE = {"lat": 43.6045, "lon": 1.4440}
+# Fond de carte : plan Voyager (rues, parcs, Garonne) adouci par un voile ardoise posé sous les stations,
+# ni noir ni blanc éblouissant
+MAP_STYLE = "carto-voyager"
+MAP_TINT = dict(sourcetype="geojson", type="fill", color="#2b3a55", opacity=0.3, below="traces",
+                source={"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [
+                    [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]]}})
+MAP_LINE = "rgba(29,36,51,0.75)"
 CLUSTER_SLOTS = {"Résidentielle": 0, "Pôle d'activité": 1, "Équilibrée": 2, "Souvent vide": 7, "Souvent pleine": 6}
 
 
@@ -200,12 +207,12 @@ def station_map(df: pd.DataFrame, color: str, color_map: dict, hover: dict, size
         df, lat="lat", lon="lon", color=color, color_discrete_map=color_map,
         category_orders={color: [c for c in color_map if c in set(df[color])]},
         size=size, size_max=size_max, hover_name="station_label", hover_data=hover, labels=labels or {},
-        zoom=zoom, center=TOULOUSE, map_style="carto-darkmatter", height=height,
+        zoom=zoom, center=TOULOUSE, map_style=MAP_STYLE, height=height,
     )
     if size is None:
         fig.update_traces(marker=dict(size=9))
     fig.update_traces(marker=dict(opacity=0.92))
-    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), font=dict(color=INK_2),
+    fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), font=dict(color=INK_2), map_layers=[MAP_TINT],
                       hoverlabel=dict(bgcolor="#232321", bordercolor=GRID, font_color="#f0efec"),
                       legend=dict(orientation="h", yanchor="top", y=0.99, xanchor="left", x=0.01, title_text="",
                                   bgcolor="rgba(26,26,25,0.88)", font=dict(color="#f0efec")))
