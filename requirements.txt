@@ -1,0 +1,9 @@
+# Application Streamlit (dashboard/) — utilisé aussi par Streamlit Community Cloud
+streamlit>=1.60
+pandas>=2.2
+numpy>=1.26
+plotly>=6.0
+pyarrow>=16.0
+requests>=2.31
+tzdata>=2024.1
+databricks-sql-connector>=4.0

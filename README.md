@@ -3,10 +3,40 @@
 Pipeline de données de bout en bout sur **Databricks** autour des vélos en libre-service **VélôToulouse** et de la
 météo : ingestion planifiée, architecture médaillon sur **Delta Lake** avec contrôles qualité intégrés,
 segmentation des stations et prévision de la fréquentation suivies dans **MLflow**, tableau de bord **Power BI**
-connecté en direct au SQL warehouse, et recommandations de rééquilibrage aux heures de pointe.
+connecté en direct au SQL warehouse, application web **Streamlit**, et recommandations de rééquilibrage aux heures
+de pointe.
 
 **Stack :** Databricks (Free Edition, serverless) · PySpark · Spark SQL · Delta Lake · Auto Loader · Unity Catalog ·
-MLflow · scikit-learn · Power BI (DirectQuery, DAX) · Databricks Asset Bundles · GitHub Actions
+MLflow · scikit-learn · Power BI (DirectQuery, DAX) · Streamlit · Plotly · Databricks Asset Bundles · GitHub Actions
+
+---
+
+## Application web (Streamlit)
+
+Neuf pages qui reprennent les tables gold : vue d'ensemble, disponibilité en direct (carte des stations),
+fréquentation, effet de la météo, stations saturées, segmentation, prévision 24 h, rééquilibrage et
+pipeline & qualité.
+
+```bash
+pip install -r requirements.txt
+streamlit run dashboard/app.py
+```
+
+**Deux sources, même code :**
+
+| Mode | Activation | Données |
+|---|---|---|
+| **Databricks** | `.streamlit/secrets.toml` (voir `secrets.toml.example`) ou variables `DATABRICKS_SERVER_HOSTNAME`, `DATABRICKS_HTTP_PATH`, `DATABRICKS_TOKEN` | tables gold du SQL warehouse, agrégées côté serveur |
+| **Démo** (par défaut) | aucune | instantané Parquet de `dashboard/demo_data/` |
+
+L'instantané de démo est produit par `scripts/build_demo_data.py` (`pip install scikit-learn` en plus) : les
+stations réelles viennent du flux GBFS, l'historique horaire est **simulé**, puis traité par le même code que le
+pipeline (définitions des tables gold, KMeans, gradient boosting, `src/mobility`). La page *Disponibilité en
+direct* interroge l'API GBFS réelle dans les deux modes, et le rééquilibrage appelle directement
+`src/mobility/rebalancing.py`.
+
+**Déploiement gratuit :** [Streamlit Community Cloud](https://share.streamlit.io) → *New app* → ce dépôt, branche
+`main`, fichier `dashboard/app.py`. Les identifiants Databricks se collent dans *Settings → Secrets*.
 
 ---
 
@@ -152,6 +182,12 @@ La CI GitHub Actions lance le lint, les tests et la validation YAML du bundle à
 │   ├── 06_ml_forecast.py       # prévision départs / arrivées 24 h (MLflow)
 │   ├── 07_recommendations.py   # rééquilibrage aux heures de pointe
 │   └── mobility/               # code partagé testé (qualité, rééquilibrage, utilitaires ML)
+├── dashboard/                  # application Streamlit
+│   ├── app.py                  # point d'entrée, navigation
+│   ├── lib/                    # accès aux données (Databricks / démo), flux GBFS live, charte graphique
+│   ├── views/                  # une page par fichier
+│   └── demo_data/              # instantané Parquet de démonstration
+├── scripts/build_demo_data.py  # génère l'instantané de démo
 ├── powerbi/                    # guide du rapport + mesures DAX
 ├── tests/                      # tests unitaires pytest
 └── .github/workflows/ci.yml
