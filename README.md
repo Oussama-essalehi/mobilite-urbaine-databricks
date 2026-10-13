@@ -1,154 +1,129 @@
-# VéloScope Toulouse
+<h1 align="center">🚲 VéloScope Toulouse</h1>
 
-**Les vélos en libre-service de Toulouse, collectés, analysés et prévus en temps réel.**
+<p align="center">
+  <b>Les vélos en libre-service de Toulouse, collectés, analysés et prévus en temps réel.</b>
+</p>
 
-VéloScope observe en continu les quelque 450 stations VélôToulouse et la météo, puis transforme ces données en
-réponses simples : quand et où les Toulousains prennent le vélo, ce que change la pluie, quelles stations manquent
-de vélos ou de places, et où déplacer des vélos avant les heures de pointe.
+<p align="center">
+  <a href="https://toulouse-mobilite.streamlit.app/">
+    <img src="https://static.streamlit.io/badges/streamlit_badge_black_white.svg" alt="Ouvrir l'application">
+  </a>
+  <br>
+  <a href="https://toulouse-mobilite.streamlit.app/"><b>toulouse-mobilite.streamlit.app</b></a>
+</p>
 
 ---
 
-## Le problème
+## Le projet
 
-Tous les usagers d'un service de vélos en libre-service connaissent la situation : la station est **vide** quand
-on veut prendre un vélo, ou **pleine** quand on veut le rendre. Ces déséquilibres ne sont pas dus au hasard : ils
-suivent les rythmes de la ville (trajets domicile-travail, week-ends, météo). Si on les mesure, on peut les
+Une station est **vide** quand on veut prendre un vélo, **pleine** quand on veut le rendre. Ces déséquilibres
+suivent les rythmes de la ville (trajets domicile-travail, week-ends, météo) : on peut donc les mesurer et les
 anticiper.
 
-## Ce que fait le projet
+VéloScope collecte en continu l'état des **~450 stations VélôToulouse** et la météo, puis les transforme en
+réponses concrètes :
 
-1. **Collecter** — toutes les 15 minutes, sans intervention humaine, le nombre de vélos et de places libres dans
-   chaque station, ainsi que la météo.
-2. **Vérifier et ranger** — les données incohérentes (station inconnue, plus de vélos que de places…) sont écartées
-   automatiquement et mises de côté pour analyse.
-3. **Analyser** — heures de pointe, effet de la pluie et de la température, stations souvent vides ou souvent
-   pleines.
-4. **Prévoir et conseiller** — estimer l'affluence des 24 prochaines heures et proposer des déplacements de vélos
-   entre stations avant les pointes.
+- 📊 **Analyser** : heures de pointe, effet de la pluie et du froid, stations souvent vides ou pleines
+- 🧩 **Segmenter** : familles de stations selon leur comportement (résidentielle, pôle d'activité…)
+- 🔮 **Prévoir** : départs et arrivées attendus sur les 24 prochaines heures
+- 🚚 **Recommander** : quels vélos déplacer, et où, avant la prochaine pointe
+
+## Architecture
+
+<table align="center">
+  <tr>
+    <th align="center">① Sources</th>
+    <th></th>
+    <th align="center">② Collecte<br><sub>toutes les 15 min</sub></th>
+    <th></th>
+    <th align="center">③ Lakehouse<br><sub>toutes les heures</sub></th>
+    <th></th>
+    <th align="center">④ Machine learning<br><sub>chaque nuit</sub></th>
+    <th></th>
+    <th align="center">⑤ Restitution</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://img.icons8.com/color/96/bicycle.png" width="40" alt="VélôToulouse"><br>
+      <b>VélôToulouse</b><br><sub>flux GBFS</sub>
+      <br><br>
+      <img src="https://github.com/open-meteo.png?size=96" width="40" alt="Open-Meteo"><br>
+      <b>Open-Meteo</b><br><sub>météo</sub>
+    </td>
+    <td align="center">➜</td>
+    <td align="center">
+      <img src="https://cdn.simpleicons.org/databricks" width="40" alt="Databricks"><br>
+      <b>Databricks Jobs</b><br><sub>serverless</sub>
+      <br><br>
+      <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" width="40" alt="Python"><br>
+      <b>Python</b><br><sub>appels API</sub>
+    </td>
+    <td align="center">➜</td>
+    <td align="center">
+      <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/apachespark/apachespark-original.svg" width="40" alt="Apache Spark"><br>
+      <b>PySpark · Spark SQL</b>
+      <br><br>
+      <img src="https://github.com/delta-io.png?size=96" width="40" alt="Delta Lake"><br>
+      <b>Delta Lake</b><br><sub>Unity Catalog</sub>
+      <br><br>
+      🥉 Bronze <sub>brut</sub><br>
+      ⬇<br>
+      🥈 Silver <sub>nettoyé, contrôlé</sub><br>
+      ⬇<br>
+      🥇 Gold <sub>tables d'analyse</sub>
+    </td>
+    <td align="center">➜</td>
+    <td align="center">
+      <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/scikitlearn/scikitlearn-original.svg" width="40" alt="scikit-learn"><br>
+      <b>scikit-learn</b><br><sub>KMeans<br>gradient boosting</sub>
+      <br><br>
+      <img src="https://cdn.simpleicons.org/mlflow" width="40" alt="MLflow"><br>
+      <b>MLflow</b><br><sub>suivi des modèles</sub>
+    </td>
+    <td align="center">➜</td>
+    <td align="center">
+      <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/streamlit/streamlit-original.svg" width="40" alt="Streamlit"><br>
+      <b>Streamlit</b><br><sub>application web</sub>
+      <br><br>
+      <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/plotly/plotly-original.svg" width="40" alt="Plotly"><br>
+      <b>Plotly</b><br><sub>cartes, graphiques</sub>
+      <br><br>
+      <img src="https://img.icons8.com/color/96/power-bi.png" width="40" alt="Power BI"><br>
+      <b>Power BI</b><br><sub>DirectQuery, DAX</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="9" align="center">
+      <b>Industrialisation</b>&nbsp;&nbsp;
+      <img src="https://cdn.simpleicons.org/databricks" width="20" alt="Databricks"> Asset Bundles (3 jobs planifiés)&nbsp;&nbsp;·&nbsp;&nbsp;
+      <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/githubactions/githubactions-original.svg" width="20" alt="GitHub Actions"> GitHub Actions (CI)&nbsp;&nbsp;·&nbsp;&nbsp;
+      <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/pytest/pytest-original.svg" width="20" alt="pytest"> pytest · ruff
+    </td>
+  </tr>
+</table>
+
+## Points techniques
+
+- **Trajets déduits, pas observés** : les API ne publient que le stock de vélos par station ; les départs et
+  arrivées sont reconstruits à partir des variations entre deux relevés.
+- **Qualité des données** : les lignes incohérentes partent en quarantaine, et une alerte est levée si le taux de
+  rejet est trop élevé ou si les données ne sont plus à jour.
+- **Prévisions validées** : le modèle de gradient boosting est comparé à une référence simple (« même heure la
+  semaine dernière ») pour prouver qu'il apporte un gain réel.
+- **Rééquilibrage** : avant chaque pointe, le stock est projeté et les stations en manque sont associées aux
+  stations excédentaires à moins de 3 km.
 
 ## L'application
 
-Le résultat est présenté dans un site web en français, pensé pour être lu sans connaissances techniques.
-
-| Page | Ce qu'on y voit |
-|---|---|
-| **Les vélos en ce moment** | la carte de toutes les stations avec leur état en direct (vide, pleine, disponible) |
-| **Quand roule-t-on ?** | l'activité heure par heure, en semaine et le week-end |
-| **L'effet de la météo** | combien de trajets en moins quand il pleut ou qu'il fait froid |
-| **Stations à problème** | les stations le plus souvent vides ou pleines aux heures de pointe |
-| **Familles de stations** | les stations regroupées selon leur comportement : quartiers résidentiels qui se vident le matin, pôles d'activité qui se remplissent… |
-| **Prévisions 24 heures** | les départs et arrivées attendus, comparés à ce qui s'est réellement passé |
-| **Déplacer les vélos** | les stations à réapprovisionner ou à délester avant la prochaine pointe, et les trajets de camion proposés |
-| **Comment ça marche** | le fonctionnement du pipeline et le suivi de la qualité des données |
-
-L'application fonctionne de deux façons : branchée sur Databricks, elle affiche les **données réelles** mises à jour
-en continu ; sans connexion, elle affiche une **démonstration** (vraies stations, historique simulé).
-
-## Comment ça marche
-
-```
-   Sources                     Collecte (toutes les 15 min)        Analyse (toutes les heures)        Résultats
-┌─────────────────┐          ┌────────────────────────────┐      ┌────────────────────────────┐
-│ VélôToulouse    │          │  bronze : réponses brutes  │      │  gold : tables d'analyse   │      Site web
-│ (état stations) │ ───────► │  silver : données propres  │ ───► │  recommandations           │ ───► Streamlit
-│ Open-Meteo      │          │           et vérifiées     │      ├────────────────────────────┤
-│ (météo)         │          └────────────────────────────┘      │  Machine learning (nuit) : │      Rapport
-└─────────────────┘                                              │  familles + prévisions     │ ───► Power BI
-                                                                 └────────────────────────────┘
-```
-
-Les données traversent trois étapes, selon l'**architecture « médaillon »** :
-
-- **Bronze** — chaque réponse des API est conservée telle quelle. Si le format d'une API change, rien ne casse :
-  on peut toujours retraiter l'historique.
-- **Silver** — les données sont décodées, typées, dédoublonnées et contrôlées. Les lignes invalides partent en
-  quarantaine ; si trop de lignes sont rejetées ou si les données ne sont plus à jour, une alerte est envoyée.
-- **Gold** — les tables prêtes à l'emploi : activité par station et par heure, profils de saturation, effet de la
-  météo, état actuel du réseau.
-
-Trois tâches planifiées font tourner l'ensemble : la collecte toutes les 15 minutes, l'analyse et les
-recommandations toutes les heures, et le machine learning chaque nuit.
-
-### Quelques idées clés
-
-- **Estimer les trajets sans les voir.** Les API publient le nombre de vélos par station, pas les trajets. Les
-  départs et arrivées sont déduits des variations entre deux relevés successifs.
-- **Regrouper les stations.** Chaque station est décrite par la façon dont elle se remplit au fil de la journée.
-  Un algorithme de regroupement (KMeans) en tire des familles, nommées ensuite en langage courant
-  (*résidentielle*, *pôle d'activité*, *souvent vide*…).
-- **Prévoir l'affluence.** Un modèle de gradient boosting apprend à partir de l'heure, du jour, de la météo prévue
-  et de l'activité de la veille et de la semaine précédente. Il est comparé à une méthode simple (« même heure la
-  semaine dernière ») pour vérifier qu'il apporte vraiment quelque chose.
-- **Proposer des déplacements.** Avant chaque pointe, le stock de chaque station est projeté. Les stations qui
-  vont manquer de vélos sont associées aux stations proches (moins de 3 km) qui en auront trop.
-
-Les analyses s'enrichissent avec le temps : les familles de stations apparaissent après une semaine de collecte,
-les prévisions après deux semaines, et deviennent fiables au bout de trois à quatre semaines.
-
-## Technologies
-
-| Domaine | Outils |
-|---|---|
-| Plateforme de données | Databricks (serverless), Delta Lake, Unity Catalog, Auto Loader |
-| Traitement | PySpark, Spark SQL |
-| Machine learning | scikit-learn, MLflow (suivi des expériences et des modèles) |
-| Visualisation | Streamlit, Plotly, Power BI (DirectQuery, DAX) |
-| Industrialisation | Databricks Asset Bundles (jobs planifiés), GitHub Actions (tests et lint), pytest |
+Huit pages en français, lisibles sans connaissances techniques : **carte des stations en direct**, activité heure
+par heure, effet de la météo, stations à problème, familles de stations, prévisions 24 h, déplacements de vélos
+recommandés et suivi du pipeline.
 
 ## Sources de données
 
-| Source | Contenu | Licence |
-|---|---|---|
-| [VélôToulouse — flux GBFS](https://mobilitydatabase.org/feeds/gbfs/gbfs-toulouse) (JCDecaux / Cyclocity) | état des stations en temps réel | flux public, sans clé |
-| [Open-Meteo](https://open-meteo.com/) | météo observée et prévue | CC BY 4.0 |
+- [VélôToulouse, flux GBFS](https://mobilitydatabase.org/feeds/gbfs/gbfs-toulouse) (JCDecaux / Cyclocity) : état des stations en temps réel
+- [Open-Meteo](https://open-meteo.com/) : météo observée et prévue (CC BY 4.0)
 
 ---
 
-## Lancer le projet
-
-### L'application seule
-
-```bash
-pip install -r requirements.txt
-streamlit run dashboard/app.py
-```
-
-Sans configuration, l'application s'ouvre en mode démonstration. Pour la brancher sur Databricks, copier
-`.streamlit/secrets.toml.example` en `.streamlit/secrets.toml` et renseigner les informations du SQL warehouse.
-
-### Le pipeline sur Databricks
-
-1. Créer un compte [Databricks Free Edition](https://www.databricks.com/learn/free-edition) (vérifier son identité
-   dans le workspace pour autoriser les appels aux API externes).
-2. Renseigner l'adresse du workspace dans `databricks.yml`, puis déployer les notebooks et les trois jobs :
-   ```bash
-   databricks auth login --host https://<workspace>.cloud.databricks.com
-   databricks bundle deploy -t dev
-   ```
-3. Exécuter une fois `src/00_setup.py`, puis laisser tourner les jobs.
-
-Le rapport Power BI est décrit dans [`powerbi/GUIDE_POWERBI.md`](powerbi/GUIDE_POWERBI.md).
-
-### Tests
-
-```bash
-pip install pandas numpy pytest ruff
-pytest -q
-ruff check src tests dashboard scripts
-```
-
-## Organisation du dépôt
-
-```
-├── src/                 # pipeline Databricks : ingestion, bronze, silver, gold, ML, recommandations
-│   └── mobility/        # code partagé et testé (qualité, rééquilibrage, outils ML)
-├── dashboard/           # application Streamlit (pages, accès aux données, données de démonstration)
-├── powerbi/             # guide du rapport et mesures DAX
-├── scripts/             # génération des données de démonstration
-├── tests/               # tests unitaires
-└── databricks.yml       # définition des trois jobs planifiés
-```
-
----
-
-Projet réalisé par **Oussama Essalehi**.
+<p align="center">Projet réalisé par <b>Oussama Essalehi</b></p>
